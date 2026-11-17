@@ -417,6 +417,58 @@ body {
     font-weight: 500;
 }
 
+/* ── Smart Error UI with City Suggestions ── */
+.error-smart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.error-smart__header {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fca5a5;
+}
+
+.error-smart__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.suggestion-city {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-sm);
+    color: #93c5fd;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.suggestion-city:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: var(--primary-400);
+    color: #fff;
+    transform: translateX(4px);
+}
+
+.suggestion-bullet {
+    color: #60a5fa;
+    font-size: 1.1rem;
+}
+
+.error-smart__hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 0.25rem;
+}
+
 /* ── Cards & Grid ── */
 .dashboard {
     display: flex;

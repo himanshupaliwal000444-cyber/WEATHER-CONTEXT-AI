@@ -1,9 +1,12 @@
 """
-Weather Context AI — FastAPI Backend (Enhanced)
-================================================
+Weather Context AI — FastAPI Backend (Enhanced V3)
+====================================================
 Hybrid architecture:
 - Rule-based alerts for immediate deterministic safety (health, farming, lifestyle)
 - Google Gemini LLM for synthesis advisory and interactive weather chat assistant
+- Conversational memory: chat carries last 5 messages for multi-turn context
+- Rate limiting: slowapi protects Gemini API quota (10 chat msgs/minute per IP)
+- Smart error handling: AI-powered city name suggestions on lookup failures
 - SQLite cache for fast responses and API savings
 """
 
@@ -18,12 +21,15 @@ from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from google import genai
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # ──────────────────────────────────────────────
 #  Configuration & Initialization
@@ -46,6 +52,9 @@ if GEMINI_API_KEY:
         genai_client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
         print(f"Warning: Failed to init GenAI client: {e}")
+
+# ── Rate Limiter (slowapi) ──
+limiter = Limiter(key_func=get_remote_address)
 
 # ──────────────────────────────────────────────
 #  SQLite Cache Helpers
@@ -117,46 +126,35 @@ def run_rule_engine(weather: dict) -> list[dict]:
     aqi_data = current.get("air_quality", {})
     us_epa = aqi_data.get("us-epa-index", 0)
     pm25 = aqi_data.get("pm2_5", 0)
-    pm10 = aqi_data.get("pm10", 0)
 
     if us_epa >= 5:
         alerts.append({
-            "type": "warning",
-            "category": "health",
-            "icon": "☣️",
+            "type": "warning", "category": "health", "icon": "☣️",
             "title": "Hazardous Air Pollution",
             "message": f"Hazardous air quality (EPA Index {us_epa}). Stay indoors. High-efficiency N95 masks mandatory outdoors.",
         })
     elif us_epa >= 4:
         alerts.append({
-            "type": "warning",
-            "category": "health",
-            "icon": "😷",
+            "type": "warning", "category": "health", "icon": "😷",
             "title": "Very Unhealthy Air",
             "message": f"Very unhealthy air (EPA Index {us_epa}). Wear an N95 mask outside and avoid outdoor cardio/exercise.",
         })
     elif us_epa >= 3:
         alerts.append({
-            "type": "caution",
-            "category": "health",
-            "icon": "⚠️",
+            "type": "caution", "category": "health", "icon": "⚠️",
             "title": "Unhealthy for Sensitive Groups",
             "message": f"Unhealthy air quality (EPA Index {us_epa}). Asthmatic individuals and elders should limit outdoor stay.",
         })
     elif us_epa >= 2:
         alerts.append({
-            "type": "info",
-            "category": "health",
-            "icon": "💨",
+            "type": "info", "category": "health", "icon": "💨",
             "title": "Moderate Air Quality",
             "message": "Moderate air quality. Sensitive people should watch for irritation during prolonged exertion.",
         })
 
     if pm25 > 35:
         alerts.append({
-            "type": "caution",
-            "category": "health",
-            "icon": "🫁",
+            "type": "caution", "category": "health", "icon": "🫁",
             "title": "Elevated PM2.5",
             "message": f"Fine particulate PM2.5 is high at {pm25:.1f} µg/m³. Close windows during peak traffic hours.",
         })
@@ -165,25 +163,19 @@ def run_rule_engine(weather: dict) -> list[dict]:
     uv = current.get("uv", 0)
     if uv >= 11:
         alerts.append({
-            "type": "warning",
-            "category": "health",
-            "icon": "☀️",
+            "type": "warning", "category": "health", "icon": "☀️",
             "title": "Extreme Solar Radiation",
             "message": f"Extreme UV index ({uv}). Stay shaded between 10 AM – 4 PM. Apply SPF 50+ sunscreen.",
         })
     elif uv >= 8:
         alerts.append({
-            "type": "caution",
-            "category": "health",
-            "icon": "🧴",
+            "type": "caution", "category": "health", "icon": "🧴",
             "title": "Very High UV",
             "message": f"Very high UV index ({uv}). Wear protective hat, UV-blocking sunglasses, and SPF 30+ sunscreen.",
         })
     elif uv >= 6:
         alerts.append({
-            "type": "info",
-            "category": "lifestyle",
-            "icon": "🕶️",
+            "type": "info", "category": "lifestyle", "icon": "🕶️",
             "title": "High UV Levels",
             "message": f"High UV index ({uv}). Sun protection recommended for outdoor activities.",
         })
@@ -194,33 +186,25 @@ def run_rule_engine(weather: dict) -> list[dict]:
 
     if temp_c >= 42:
         alerts.append({
-            "type": "warning",
-            "category": "health",
-            "icon": "🔥",
+            "type": "warning", "category": "health", "icon": "🔥",
             "title": "Extreme Heatwave",
             "message": f"Extreme heat alert ({temp_c}°C, feels like {feelslike_c}°C). Heat exhaustion & stroke danger. Hydrate with electrolytes.",
         })
     elif temp_c >= 38:
         alerts.append({
-            "type": "caution",
-            "category": "health",
-            "icon": "🌡️",
+            "type": "caution", "category": "health", "icon": "🌡️",
             "title": "Intense Heat",
             "message": f"Very hot conditions ({temp_c}°C). Drink water frequently and avoid heavy midday manual labor.",
         })
     elif temp_c <= 0:
         alerts.append({
-            "type": "warning",
-            "category": "lifestyle",
-            "icon": "🥶",
+            "type": "warning", "category": "lifestyle", "icon": "🥶",
             "title": "Freezing Freeze Warning",
             "message": f"Freezing temperatures ({temp_c}°C). Black ice danger on roads. Wear thermal insulated layers.",
         })
     elif temp_c <= 5:
         alerts.append({
-            "type": "caution",
-            "category": "lifestyle",
-            "icon": "🧥",
+            "type": "caution", "category": "lifestyle", "icon": "🧥",
             "title": "Chilly Weather",
             "message": f"Cold weather ({temp_c}°C, feels like {feelslike_c}°C). Wear warm woolen layers when commuting.",
         })
@@ -231,17 +215,13 @@ def run_rule_engine(weather: dict) -> list[dict]:
 
     if rain_chance > 80:
         alerts.append({
-            "type": "warning",
-            "category": "lifestyle",
-            "icon": "🌧️",
+            "type": "warning", "category": "lifestyle", "icon": "🌧️",
             "title": "Heavy Downpour Expected",
             "message": f"Heavy rain virtually guaranteed ({rain_chance}% chance, ~{rain_mm:.1f} mm). Carry umbrellas and expect transit delays.",
         })
     elif rain_chance > 50:
         alerts.append({
-            "type": "caution",
-            "category": "lifestyle",
-            "icon": "🌂",
+            "type": "caution", "category": "lifestyle", "icon": "🌂",
             "title": "Rain Shower Alert",
             "message": f"Precipitation likely today ({rain_chance}% chance). Keep waterproof rainwear handy.",
         })
@@ -252,26 +232,20 @@ def run_rule_engine(weather: dict) -> list[dict]:
 
     if rain_chance > 60:
         alerts.append({
-            "type": "warning",
-            "category": "agriculture",
-            "icon": "🚫",
+            "type": "warning", "category": "agriculture", "icon": "🚫",
             "title": "Cancel Chemical Spraying",
             "message": f"Postpone pesticide and fertilizer spraying — high rain probability ({rain_chance}%). Rain will wash chemicals into soil runoff.",
         })
     elif wind_kph > 25:
         alerts.append({
-            "type": "caution",
-            "category": "agriculture",
-            "icon": "💨",
+            "type": "caution", "category": "agriculture", "icon": "💨",
             "title": "Chemical Drift Risk",
             "message": f"Gusty winds ({wind_kph:.0f} km/h). Delay spray application to prevent toxic chemical drift to unintended fields.",
         })
     else:
         if rain_chance < 30 and wind_kph < 15:
             alerts.append({
-                "type": "info",
-                "category": "agriculture",
-                "icon": "🌱",
+                "type": "info", "category": "agriculture", "icon": "🌱",
                 "title": "Optimal Spray Window",
                 "message": "Favorable spraying conditions: Low precipitation risk and gentle wind velocity.",
             })
@@ -279,17 +253,13 @@ def run_rule_engine(weather: dict) -> list[dict]:
     # Agriculture: Irrigation
     if humidity < 30 and rain_chance < 20:
         alerts.append({
-            "type": "caution",
-            "category": "agriculture",
-            "icon": "💧",
+            "type": "caution", "category": "agriculture", "icon": "💧",
             "title": "Dry Soil / Irrigate Needed",
             "message": f"Low relative humidity ({humidity}%) with zero rain forecast. Soil moisture evapotranspiration is rapid — irrigate crops.",
         })
     elif rain_mm > 15:
         alerts.append({
-            "type": "info",
-            "category": "agriculture",
-            "icon": "🌾",
+            "type": "info", "category": "agriculture", "icon": "🌾",
             "title": "Skip Irrigation",
             "message": f"Natural precipitation adequate (~{rain_mm:.0f} mm). Turn off electric tube-wells and drip systems to conserve energy.",
         })
@@ -298,9 +268,7 @@ def run_rule_engine(weather: dict) -> list[dict]:
     min_temp = forecast_day.get("mintemp_c", temp_c)
     if min_temp <= 2:
         alerts.append({
-            "type": "warning",
-            "category": "agriculture",
-            "icon": "❄️",
+            "type": "warning", "category": "agriculture", "icon": "❄️",
             "title": "Frost & Crop Cold Damage",
             "message": f"Frost risk tonight (low of {min_temp}°C). Cover horticultural nurseries or smoke orchards to prevent freeze burn.",
         })
@@ -308,17 +276,13 @@ def run_rule_engine(weather: dict) -> list[dict]:
     # Lifestyle: Wind & Visibility
     if wind_kph > 50:
         alerts.append({
-            "type": "warning",
-            "category": "lifestyle",
-            "icon": "🌪️",
+            "type": "warning", "category": "lifestyle", "icon": "🌪️",
             "title": "High Wind Hazard",
             "message": f"Gale-force gusts ({wind_kph:.0f} km/h). Anchor loose patio equipment. Watch for falling tree branches.",
         })
     elif wind_kph > 30:
         alerts.append({
-            "type": "caution",
-            "category": "lifestyle",
-            "icon": "🌬️",
+            "type": "caution", "category": "lifestyle", "icon": "🌬️",
             "title": "Breezy Conditions",
             "message": f"Strong breeze ({wind_kph:.0f} km/h). Two-wheeler riders should exercise caution on highways.",
         })
@@ -326,17 +290,13 @@ def run_rule_engine(weather: dict) -> list[dict]:
     vis_km = current.get("vis_km", 10)
     if vis_km < 1:
         alerts.append({
-            "type": "warning",
-            "category": "lifestyle",
-            "icon": "🌫️",
+            "type": "warning", "category": "lifestyle", "icon": "🌫️",
             "title": "Dense Fog / Low Visibility",
             "message": f"Critical low visibility ({vis_km} km). Turn on amber fog lights and reduce driving speeds drastically.",
         })
     elif vis_km < 4:
         alerts.append({
-            "type": "caution",
-            "category": "lifestyle",
-            "icon": "🌁",
+            "type": "caution", "category": "lifestyle", "icon": "🌁",
             "title": "Hazy Visibility",
             "message": f"Moderate haze ({vis_km} km visibility). Keep low-beam headlights active.",
         })
@@ -400,6 +360,34 @@ async def generate_ai_advisory(weather: dict, location_name: str) -> str:
     return call_gemini(prompt)
 
 
+def generate_city_suggestion(user_query: str) -> str:
+    """
+    When a city lookup fails, ask Gemini to suggest correct city names.
+    Returns a friendly HTML string with suggestions.
+    """
+    if not genai_client:
+        return f'Could not find weather data for "{user_query}". Please check the spelling and try again.'
+
+    prompt = (
+        f'The user searched for a city called "{user_query}" on a weather app, but it was not found.\n'
+        "Respond in EXACTLY this format (nothing else):\n"
+        '🔍 Hmm, I couldn\'t find "{user_query}". Did you mean one of these?\n'
+        "• City1, Country\n"
+        "• City2, Country\n"
+        "• City3, Country\n\n"
+        "Rules:\n"
+        "- Suggest 3 real cities that sound similar or could be what the user meant.\n"
+        "- If it looks like a misspelling (e.g. 'Deli' → 'Delhi'), put the corrected one first.\n"
+        "- If it looks valid but obscure, suggest the nearest well-known cities in that region.\n"
+        "- Keep it short and friendly with emojis.\n"
+    )
+
+    try:
+        return call_gemini(prompt)
+    except Exception:
+        return f'Could not find weather data for "{user_query}". Please check the spelling and try again.'
+
+
 # ──────────────────────────────────────────────
 #  FastAPI App
 # ──────────────────────────────────────────────
@@ -411,9 +399,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Weather Context AI",
     description="Intelligent AI-driven contextual weather analysis for Health, Agriculture & Lifestyle",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
+
+# Register rate limiter and its exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -426,6 +418,7 @@ app.add_middleware(
 
 @app.get("/api/weather")
 async def get_weather(
+    request: Request,
     q: Optional[str] = Query(None, description="City name or 'lat,lon' string"),
     lat: Optional[float] = Query(None, ge=-90, le=90, description="Latitude"),
     lon: Optional[float] = Query(None, ge=-180, le=180, description="Longitude"),
@@ -455,7 +448,16 @@ async def get_weather(
                 },
             )
             if resp.status_code == 400:
-                raise HTTPException(status_code=404, detail="Location not found. Please try another city.")
+                # ── Smart Error: AI-powered city suggestion ──
+                suggestion = generate_city_suggestion(query_val)
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "detail": suggestion,
+                        "error_type": "city_not_found",
+                        "original_query": query_val,
+                    },
+                )
             resp.raise_for_status()
             weather = resp.json()
     except HTTPException:
@@ -528,24 +530,31 @@ async def get_weather(
 
 
 # ──────────────────────────────────────────────
-#  Interactive Weather AI Chat Endpoint
+#  Interactive Weather AI Chat (with Memory)
 # ──────────────────────────────────────────────
+class ChatHistoryItem(BaseModel):
+    role: str    # "user" or "bot"
+    text: str
+
+
 class ChatMessage(BaseModel):
     message: str
+    history: list[ChatHistoryItem] = []  # Last 5 messages for conversational memory
     weather_context: Optional[dict] = None
 
 
 @app.post("/api/chat")
-async def chat_weather(payload: ChatMessage):
+@limiter.limit("10/minute")
+async def chat_weather(request: Request, payload: ChatMessage):
     """
     Real-time interactive chat with Aero the Weather AI.
-    Answers user questions tailored to health, agriculture, and lifestyle
-    with context from the currently viewed location.
+    Now with conversational memory (last 5 messages) and rate limiting.
     """
     user_msg = payload.message.strip()
     if not user_msg:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
+    # ── Build weather context string ──
     ctx_str = "No specific location weather loaded yet."
     if payload.weather_context:
         ctx = payload.weather_context
@@ -561,6 +570,17 @@ async def chat_weather(payload: ChatMessage):
             f"Forecast: Rain Chance {fc.get('rain_chance')}%, High/Low: {fc.get('maxtemp_c')}°C / {fc.get('mintemp_c')}°C\n"
         )
 
+    # ── Build conversation history string ──
+    history_str = ""
+    if payload.history:
+        # Keep only the last 5 messages
+        recent = payload.history[-5:]
+        lines = []
+        for msg in recent:
+            speaker = "User" if msg.role == "user" else "Aero"
+            lines.append(f"{speaker}: {msg.text}")
+        history_str = "\n".join(lines)
+
     system_prompt = (
         "You are Aero, an intelligent, friendly AI Weather & Environmental Companion.\n"
         "Your mission is to provide helpful, actionable, scientific, and warm qualitative guidance for:\n"
@@ -568,11 +588,22 @@ async def chat_weather(payload: ChatMessage):
         "2. Agriculture & Gardening (irrigation windows, pesticide spraying feasibility, frost protection)\n"
         "3. Daily Lifestyle & Commute (clothing advice, umbrella needs, road safety, exercise planning)\n\n"
         f"CURRENT REAL-TIME WEATHER CONTEXT:\n{ctx_str}\n\n"
+    )
+
+    if history_str:
+        system_prompt += (
+            "CONVERSATION HISTORY (remember what the user told you earlier):\n"
+            f"{history_str}\n\n"
+        )
+
+    system_prompt += (
         "Guidelines:\n"
         "- Answer the user's question directly, clearly, and concisely (2 to 4 sentences or bullet points).\n"
-        "- Incorporate numbers from the context when relevant (e.g. mention the exact rain %, UV index, or AQI).\n"
+        "- Incorporate numbers from the weather context when relevant (e.g. mention the exact rain %, UV index, or AQI).\n"
+        "- IMPORTANT: Remember and use facts from the conversation history. If the user previously mentioned "
+        "their crop, health condition, travel plans, etc., factor that into your response.\n"
         "- Use friendly emojis.\n\n"
-        f"User Question: {user_msg}\n\n"
+        f"User's latest message: {user_msg}\n\n"
         "Aero's Response:"
     )
 
