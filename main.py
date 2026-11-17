@@ -43,7 +43,10 @@ WEATHERAPI_BASE = "https://api.weatherapi.com/v1"
 GEMINI_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash"]
 
 CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
-DB_PATH = Path(__file__).parent / "cache.db"
+
+# In-Memory SQLite URI: runs entirely in RAM with zero files written to disk
+SQLITE_URI = "file:weather_cache?mode=memory&cache=shared"
+_master_conn: Optional[sqlite3.Connection] = None
 
 # Initialize Google GenAI client if key is available
 genai_client: Optional[genai.Client] = None
@@ -57,22 +60,24 @@ if GEMINI_API_KEY:
 limiter = Limiter(key_func=get_remote_address)
 
 # ──────────────────────────────────────────────
-#  SQLite Cache Helpers
+#  SQLite In-Memory Cache Helpers
 # ──────────────────────────────────────────────
 def _get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS llm_cache (
-            cache_key  TEXT PRIMARY KEY,
-            response   TEXT NOT NULL,
-            created_at REAL NOT NULL
+    global _master_conn
+    if _master_conn is None:
+        # Keep one master connection open so the shared in-memory DB persists in RAM
+        _master_conn = sqlite3.connect(SQLITE_URI, uri=True, check_same_thread=False)
+        _master_conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS llm_cache (
+                cache_key  TEXT PRIMARY KEY,
+                response   TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """
         )
-        """
-    )
-    conn.commit()
-    return conn
+        _master_conn.commit()
+    return sqlite3.connect(SQLITE_URI, uri=True, check_same_thread=False)
 
 
 def cache_get(key: str) -> Optional[str]:
