@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather Context AI — Intelligent Insights & Companion</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+    />
+</head>
+<body class="theme-ambient">
+    <!-- ── Ambient Glow Background ── -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+        <div class="ambient-orb orb-3"></div>
+    </div>
+
+    <!-- ── Header ── -->
+    <header class="header">
+        <div class="header__inner">
+            <div class="header__brand">
+                <div class="header__logo-wrap">
+                    <span class="header__logo-icon">🌤️</span>
+                    <span class="live-dot" title="Live Meteorological Feed"></span>
+                </div>
+                <div>
+                    <h1 class="header__title">Weather Context <span class="gradient-text">AI</span></h1>
+                    <p class="header__tagline">Qualitative intelligence for Health, Agriculture &amp; Daily Living</p>
+                </div>
+            </div>
+
+            <!-- Quick stats bar in header -->
+            <div class="header__live-status">
+                <span class="pill-chip pill-chip--glow">⚡ Hybrid Rule-Engine + Gemini AI</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- ── Search & Location Control Hub ── -->
+        <section class="control-hub">
+            <form id="search-form" class="search-form" onsubmit="return false;">
+                <div class="search-input-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input
+                        type="text"
+                        id="city-input"
+                        class="search-input"
+                        placeholder="Search any city or region (e.g. Kota, Delhi, Tokyo, London)..."
+                        autocomplete="off"
+                    />
+                    <button type="submit" id="btn-search" class="btn btn--search">Search</button>
+                </div>
+            </form>
+
+            <div class="location-actions">
+                <button id="btn-locate" class="btn btn--locate" title="Use GPS Location">
+                    <span class="btn-icon">📍</span> Detect My Location
+                </button>
+            </div>
+        </section>
+
+        <!-- Quick Location Pills -->
+        <div class="quick-cities">
+            <span class="quick-cities__label">Trending:</span>
+            <button class="city-chip" data-city="Kota">Kota</button>
+            <button class="city-chip" data-city="Jaipur">Jaipur</button>
+            <button class="city-chip" data-city="New Delhi">New Delhi</button>
+            <button class="city-chip" data-city="Mumbai">Mumbai</button>
+            <button class="city-chip" data-city="Bengaluru">Bengaluru</button>
+            <button class="city-chip" data-city="London">London</button>
+            <button class="city-chip" data-city="Tokyo">Tokyo</button>
+            <button class="city-chip" data-city="New York">New York</button>
+        </div>
+
+        <!-- Location Status Ribbon -->
+        <div id="location-ribbon" class="location-ribbon">
+            <span id="location-label" class="location-ribbon__text">
+                👋 Welcome! Search a city above or click "Detect My Location" to begin.
+            </span>
+            <span id="local-time" class="location-ribbon__time"></span>
+        </div>
+
+        <!-- ── Loading State ── -->
+        <div id="loader" class="loader hidden">
+            <div class="spinner-ring">
+                <div></div><div></div><div></div><div></div>
+            </div>
+            <p class="loader__title">Synthesizing Environmental Metrics...</p>
+            <p class="loader__sub">Running rule engine &amp; invoking Gemini AI</p>
+        </div>
+
+        <!-- ── Error Banner ── -->
+        <div id="error-banner" class="error-banner hidden"></div>
+
+        <!-- ── Main Dashboard ── -->
+        <div id="dashboard" class="dashboard hidden">
+
+            <!-- Hero Weather & Metrics Grid -->
+            <div class="dashboard__top-row">
+                <!-- Current Weather Card -->
+                <section class="card card--hero">
+                    <div class="card__header">
+                        <span class="card__badge">Live Conditions</span>
+                        <span id="metric-pressure" class="card__micro-stat">-- mb</span>
+                    </div>
+
+                    <div class="hero-weather">
+                        <div class="hero-weather__main">
+                            <img id="weather-icon" src="" alt="Condition" class="hero-weather__icon" />
+                            <div>
+                                <div class="hero-weather__temp">
+                                    <span id="temp-value" class="temp-number">--</span>
+                                    <span class="temp-unit">°C</span>
+                                </div>
+                                <div id="weather-condition" class="hero-weather__condition">--</div>
+                                <div class="hero-weather__feels">Feels like <strong id="feelslike">--°C</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="hero-weather__metrics-grid">
+                            <div class="metric-box">
+                                <span class="metric-icon">💧</span>
+                                <div>
+                                    <span class="metric-label">Humidity</span>
+                                    <span id="humidity" class="metric-val">--%</span>
+                                </div>
+                            </div>
+                            <div class="metric-box">
+                                <span class="metric-icon">💨</span>
+                                <div>
+                                    <span class="metric-label">Wind Velocity</span>
+                                    <span id="wind" class="metric-val">-- km/h</span>
+                                </div>
+                            </div>
+                            <div class="metric-box">
+                                <span class="metric-icon">☀️</span>
+                                <div>
+                                    <span class="metric-label">UV Index</span>
+                                    <span id="uv" class="metric-val">--</span>
+                                </div>
+                            </div>
+                            <div class="metric-box">
+                                <span class="metric-icon">👁️</span>
+                                <div>
+                                    <span class="metric-label">Visibility</span>
+                                    <span id="visibility" class="metric-val">-- km</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Forecast & Environmental Gauges Card -->
+                <section class="card card--forecast-gauge">
+                    <div class="card__header">
+                        <span class="card__badge card__badge--purple">Day Outlook</span>
+                    </div>
+
+                    <div class="forecast-highlights">
+                        <div class="highlight-item">
+                            <div class="highlight-item__top">
+                                <span>🌧️ Rain Likelihood</span>
+                                <strong id="rain-chance">--%</strong>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="rain-bar" class="progress-fill progress-fill--blue" style="width: 0%"></div>
+                            </div>
+                            <span class="highlight-sub">Volume: <span id="precip">-- mm</span></span>
+                        </div>
+
+                        <div class="highlight-item">
+                            <div class="highlight-item__top">
+                                <span>🌡️ Temperature Range</span>
+                                <strong id="highlow">-- / --°C</strong>
+                            </div>
+                            <div class="temp-range-bar">
+                                <span class="range-sub">Min <span id="min-temp-label">--</span></span>
+                                <span class="range-sub">Max <span id="max-temp-label">--</span></span>
+                            </div>
+                        </div>
+
+                        <div class="highlight-item">
+                            <div class="highlight-item__top">
+                                <span>💦 Mean Humidity</span>
+                                <strong id="avg-humidity">--%</strong>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="humidity-bar" class="progress-fill progress-fill--cyan" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Air Quality Index (AQI) Banner -->
+            <section class="card card--aqi-immersive">
+                <div class="aqi-immersive__header">
+                    <div class="aqi-title-wrap">
+                        <span class="card__badge card__badge--teal">Environmental Health</span>
+                        <h2 class="card__title">Air Quality Index &amp; Particulates</h2>
+                    </div>
+                    <div id="aqi-badge" class="aqi-pill aqi-pill--unknown">Evaluating...</div>
+                </div>
+
+                <div class="aqi-meter-strip">
+                    <div class="aqi-step" data-level="1">Good</div>
+                    <div class="aqi-step" data-level="2">Moderate</div>
+                    <div class="aqi-step" data-level="3">Sensitive</div>
+                    <div class="aqi-step" data-level="4">Unhealthy</div>
+                    <div class="aqi-step" data-level="5">Hazardous</div>
+                </div>
+
+                <div class="pollutant-grid">
+                    <div class="pollutant-card">
+                        <span class="pollutant-label">PM2.5</span>
+                        <span id="pm25" class="pollutant-val">--</span>
+                        <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-card">
+                        <span class="pollutant-label">PM10</span>
+                        <span id="pm10" class="pollutant-val">--</span>
+                        <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-card">
+                        <span class="pollutant-label">Carbon Monoxide (CO)</span>
+                        <span id="co" class="pollutant-val">--</span>
+                        <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-card">
+                        <span class="pollutant-label">Nitrogen Dioxide (NO₂)</span>
+                        <span id="no2" class="pollutant-val">--</span>
+                        <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-card">
+                        <span class="pollutant-label">Ozone (O₃)</span>
+                        <span id="o3" class="pollutant-val">--</span>
+                        <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Qualitative Advisory Card -->
+            <section class="card card--ai-advisory">
+                <div class="ai-advisory__header">
+                    <div class="ai-advisory__brand">
+                        <div class="ai-sparkle-icon">✨</div>
+                        <div>
+                            <h2 class="ai-advisory__title">Gemini AI Qualitative Synthesis</h2>
+                            <p class="ai-advisory__sub">Real-time dynamic synthesis for health, farming &amp; living</p>
+                        </div>
+                    </div>
+                    <div class="ai-advisory__actions">
+                        <button id="btn-speak" class="action-btn" title="Listen to advisory">
+                            <span class="action-icon">🔊</span> Listen
+                        </button>
+                        <button id="btn-copy-advisory" class="action-btn" title="Copy text">
+                            <span class="action-icon">📋</span> Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="ai-advisory__body">
+                    <p id="ai-advisory" class="ai-advisory__text">Awaiting weather data to generate AI insights...</p>
+                </div>
+            </section>
+
+            <!-- Deterministic Rule-Engine Alerts -->
+            <section class="card card--smart-alerts">
+                <div class="alerts-header">
+                    <div>
+                        <div class="alerts-header__meta">
+                            <span class="card__badge card__badge--red">Rule Engine V2</span>
+                            <span id="alerts-count-badge" class="count-pill">0 Alerts</span>
+                        </div>
+                        <h2 class="card__title">Domain-Specific Actionable Directives</h2>
+                    </div>
+
+                    <div class="alerts-filter">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="health">🏥 Health</button>
+                        <button class="filter-btn" data-filter="agriculture">🌾 Agriculture</button>
+                        <button class="filter-btn" data-filter="lifestyle">🧳 Lifestyle</button>
+                    </div>
+                </div>
+
+                <div id="alerts-list" class="alerts-list">
+                    <p class="alerts-list__empty">No active alerts generated.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- ── Interactive AI Weather Chatbox (Floating Drawer) ── -->
+    <div id="chat-widget" class="chat-widget">
+        <!-- Floating Trigger Button -->
+        <button id="chat-toggle-btn" class="chat-toggle-btn" title="Chat with Aero Weather AI">
+            <span class="chat-toggle-icon">💬</span>
+            <span class="chat-toggle-label">Ask Aero AI</span>
+            <span class="chat-pulse-dot"></span>
+        </button>
+
+        <!-- Chat Panel Window -->
+        <div id="chat-window" class="chat-window hidden">
+            <div class="chat-header">
+                <div class="chat-header__title">
+                    <div class="chat-avatar">🤖</div>
+                    <div>
+                        <div class="chat-bot-name">Aero AI Assistant</div>
+                        <div class="chat-bot-status">
+                            <span class="online-indicator"></span> Context-aware weather advisor
+                        </div>
+                    </div>
+                </div>
+                <button id="chat-close-btn" class="chat-close-btn" title="Minimize Chat">✕</button>
+            </div>
+
+            <!-- Quick Suggestions Chips -->
+            <div class="chat-suggestions">
+                <button class="suggestion-chip" data-prompt="🌾 Can I spray pesticide or fertilizer today?">🌾 Spray crops?</button>
+                <button class="suggestion-chip" data-prompt="🏃 Is it safe to go for an outdoor run today?">🏃 Outdoor run?</button>
+                <button class="suggestion-chip" data-prompt="👕 What clothes and gear should I wear today?">👕 What to wear?</button>
+                <button class="suggestion-chip" data-prompt="🫁 Any respiratory or asthma precautions for this AQI?">🫁 Asthma safety?</button>
+            </div>
+
+            <!-- Chat Message Feed -->
+            <div id="chat-messages" class="chat-messages">
+                <div class="chat-msg chat-msg--bot">
+                    <div class="chat-msg__bubble">
+                        👋 Hi! I'm <strong>Aero</strong>, your contextual weather intelligence assistant. Ask me anything about health precautions, farming decisions, clothing, or daily plans for this location!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing indicator -->
+            <div id="chat-typing" class="chat-typing hidden">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span> Aero is thinking...
+            </div>
+
+            <!-- Chat Input Area -->
+            <form id="chat-form" class="chat-input-area" onsubmit="return false;">
+                <input
+                    type="text"
+                    id="chat-input"
+                    class="chat-input"
+                    placeholder="Ask about crops, health, outfit, weather..."
+                    autocomplete="off"
+                />
+                <button type="submit" id="chat-send-btn" class="chat-send-btn">
+                    <span>➤</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <footer class="footer">
+        <div class="footer__inner">
+            <p><strong>Weather Context AI</strong> &mdash; Project by Himanshu Paliwal (Career Point University)</p>
+            <p class="footer__sub">Powered by WeatherAPI.com &amp; Google Gemini AI &bull; Built with FastAPI &amp; SQLite</p>
+        </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
